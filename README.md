@@ -28,6 +28,29 @@ Result: so far still crashes under Load...
 
 ---
 
+Problem was a fautly power supply.
+
+Kernel 6.18 and 6.19 are using a new reset methode. But this seems to cause problems. Furthermore you cannot disable it and use vendor-reset instaed:
+```
+[  490.129794] amd_iommu_report_page_fault: 115868 callbacks suppressed
+[  490.129798] vfio-pci 0000:06:00.0: AMD-Vi: Event logged [IO_PAGE_FAULT domain=0x0002 address=0x3682ff000 flags=0x0000]
+[  490.129814] vfio-pci 0000:06:00.0: AMD-Vi: Event logged [IO_PAGE_FAULT domain=0x0002 address=0x368300000 flags=0x0000]
+[  490.129826] vfio-pci 0000:06:00.0: AMD-Vi: Event logged [IO_PAGE_FAULT domain=0x0002 address=0x368301000 flags=0x0000]
+[  490.129838] vfio-pci 0000:06:00.0: AMD-Vi: Event logged [IO_PAGE_FAULT domain=0x0002 address=0x368302000 flags=0x0000]
+[  490.129849] vfio-pci 0000:06:00.0: AMD-Vi: Event logged [IO_PAGE_FAULT domain=0x0002 address=0x368303000 flags=0x0000]
+[  490.129861] vfio-pci 0000:06:00.0: AMD-Vi: Event logged [IO_PAGE_FAULT domain=0x0002 address=0x368304000 flags=0x0000]
+[  490.129872] vfio-pci 0000:06:00.0: AMD-Vi: Event logged [IO_PAGE_FAULT domain=0x0002 address=0x368305000 flags=0x0000]
+[  490.129883] vfio-pci 0000:06:00.0: AMD-Vi: Event logged [IO_PAGE_FAULT domain=0x0002 address=0x368306000 flags=0x0000]
+[  490.129895] vfio-pci 0000:06:00.0: AMD-Vi: Event logged [IO_PAGE_FAULT domain=0x0002 address=0x368307000 flags=0x0000]
+[  490.129906] vfio-pci 0000:06:00.0: AMD-Vi: Event logged [IO_PAGE_FAULT domain=0x0002 address=0x368302000 flags=0x0000]
+```
+
+So I am back to Kernel 6.12.73 + vendor-reset
+
+seems like that line is pretty stable!
+
+---
+
 ## Architecture (high-level)
 
 ![Architecture diagram](docs/architecture.svg)bash
