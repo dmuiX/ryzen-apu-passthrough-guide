@@ -28,9 +28,9 @@ Result: so far still crashes under Load...
 
 ---
 
-Problem was a fautly power supply.
+Problem of the crashes no matter what I tried was a fautly power supply.
 
-Kernel 6.18 and 6.19 are using a new reset methode. But this seems to cause problems. Furthermore you cannot disable it and use vendor-reset instaed:
+So back to testing: Current Kernel 6.18 and 6.19 are using a new reset methode. But this seems to cause problems. Furthermore you cannot disable it and use vendor-reset instaed:
 ```
 [  490.129794] amd_iommu_report_page_fault: 115868 callbacks suppressed
 [  490.129798] vfio-pci 0000:06:00.0: AMD-Vi: Event logged [IO_PAGE_FAULT domain=0x0002 address=0x3682ff000 flags=0x0000]
