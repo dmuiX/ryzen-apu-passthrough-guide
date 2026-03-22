@@ -98,10 +98,10 @@ This repo documents a setup that is meant to be **repeatable**, not luck.
 4. Put VBIOS/ROM files into `/usr/share/vgabios`  
    - `vbios_1636.dat` or `vbios_1638.dat`  
    - `ATIAudioDevice_AA01.rom`
-5. Add **both** PCI functions to your VM XML: iGPU **and** iGPU audio, and attach the ROM files
+5. Add **both** PCI functions to your VM XML: iGPU **and** iGPU audio, and attach the ROM files (CRUCIAL! Without them you get Error 43)
 6. Use **UEFI + Secure Boot (OVMF)** and recommended Hyper-V/KVM feature flags
 7. Boot Windows → install AMD drivers
-8. Activate Windows Side reset
+8. Activate Windows Side reset (Also CRUCIAL! as without it the VM is not able to reset the GPU, seems like vendor-reset is not enough)
 
 > **Full step-by-step guide is below.**
 
