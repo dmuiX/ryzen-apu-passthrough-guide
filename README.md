@@ -26,7 +26,7 @@ Since then my VM crashed when I started a Game or even When I tried to login phy
 
 Result: so far still crashes under Load...
 
----
+SOLUTION NOW:
 
 Problem of the crashes no matter what I tried was a fautly power supply.
 
