@@ -12,6 +12,24 @@ It may also work for other APUs or even some discrete GPUs (dGPUs) — **but no 
 Your exact combo of **hardware + BIOS + kernel + drivers** decides everything.
 
 ---
+
+## Quick TL;DR (8 steps)
+
+1. Enable **SVM + IOMMU** in BIOS (UEFI recommended)
+2. Install **vendor-reset** via DKMS and add your iGPU ID (`0x1636` Renoir / `0x1638` Cezanne) in `src/device-db.h`
+3. (Debian 12/13 + kernel 6.12) if DKMS fails, patch `src/amd/amdgpu/atom.c` include
+4. Put VBIOS/ROM files into `/usr/share/vgabios`  
+   - `vbios_1636.dat` or `vbios_1638.dat`  
+   - `ATIAudioDevice_AA01.rom`
+5. Add **both** PCI functions to your VM XML: iGPU **and** iGPU audio, and attach the ROM files (CRUCIAL! Without them you get Error 43)
+6. Use **UEFI + Secure Boot (OVMF)** and recommended Hyper-V/KVM feature flags
+7. Boot Windows → install AMD drivers
+8. Activate Windows Side reset (Also CRUCIAL! as without it the VM is not able to reset the GPU, seems like vendor-reset is not enough)
+
+> **Full step-by-step guide is below.**
+
+---
+
 Note: This was rock-solid for me on Debian 12 + kernel 6.12.12
 On Debian 13 + newest kernel 6.12.57 or even 6.16 or 6.17 no chance
 
@@ -87,23 +105,6 @@ This repo documents a setup that is meant to be **repeatable**, not luck.
 
 ### vendor-reset scripts
 - `install_vendor-reset_module.sh` - contains the necessary commands to first remove the dkms vendor-reset module and then install it again
-
----
-
-## Quick TL;DR (8 steps)
-
-1. Enable **SVM + IOMMU** in BIOS (UEFI recommended)
-2. Install **vendor-reset** via DKMS and add your iGPU ID (`0x1636` Renoir / `0x1638` Cezanne) in `src/device-db.h`
-3. (Debian 12/13 + kernel 6.12) if DKMS fails, patch `src/amd/amdgpu/atom.c` include
-4. Put VBIOS/ROM files into `/usr/share/vgabios`  
-   - `vbios_1636.dat` or `vbios_1638.dat`  
-   - `ATIAudioDevice_AA01.rom`
-5. Add **both** PCI functions to your VM XML: iGPU **and** iGPU audio, and attach the ROM files (CRUCIAL! Without them you get Error 43)
-6. Use **UEFI + Secure Boot (OVMF)** and recommended Hyper-V/KVM feature flags
-7. Boot Windows → install AMD drivers
-8. Activate Windows Side reset (Also CRUCIAL! as without it the VM is not able to reset the GPU, seems like vendor-reset is not enough)
-
-> **Full step-by-step guide is below.**
 
 ---
 
