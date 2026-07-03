@@ -31,7 +31,8 @@ Your exact combo of **hardware + BIOS + kernel + drivers** decides everything.
 ---
 
 Note: This was rock-solid for me on Debian 12 + kernel 6.12.12
-On Debian 13 + newest kernel 6.12.57 or even 6.16 or 6.17 no chance
+On Debian 13 + 6.12.94 works as well!
+But Debian 13 with newest kernels 6.16 or 6.17 no 6.18 or 6.19 chance
 
 NEW FINDINGS:
 I had a working version before I upgraded to Debian 13 on 10. January 2026
@@ -65,8 +66,15 @@ So back to testing: Current Kernel 6.18 and 6.19 are using a new reset methode. 
 
 So I am back to Kernel 6.12.73 + vendor-reset
 
+current Kernel 6.12.94 works as well!
+
 seems like that line is pretty stable!
 
+Another important step was to use dhe right driver:
+```bash
+Adrenalin 25.8.1 (WHQL Recommended)
+https://drivers.amd.com/drivers/whql-amd-software-adrenalin-edition-25.8.1-win10-win11-aug-vega-polaris.exe
+```
 ---
 
 ## Architecture (high-level)
