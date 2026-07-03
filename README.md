@@ -75,10 +75,11 @@ current Kernel 6.12.94 works as well!
 seems like that line is pretty stable!
 
 Another important step was to use dhe right driver:
-```bash
+
 Adrenalin 25.8.1 (WHQL Recommended)
+
 https://drivers.amd.com/drivers/whql-amd-software-adrenalin-edition-25.8.1-win10-win11-aug-vega-polaris.exe
-```
+
 ---
 
 ## Architecture (high-level)
