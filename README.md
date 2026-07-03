@@ -83,7 +83,7 @@ https://drivers.amd.com/drivers/whql-amd-software-adrenalin-edition-25.8.1-win10
 
 ## Architecture (high-level)
 
-![Architecture diagram](docs/architecture.svg)bash
+![Architecture diagram](docs/architecture.svg)
 
 ---
 
