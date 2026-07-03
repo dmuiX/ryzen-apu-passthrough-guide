@@ -17,7 +17,7 @@ Your exact combo of **hardware + BIOS + kernel + drivers** decides everything.
 
 1. Enable **SVM + IOMMU** in BIOS (UEFI recommended)
 2. Install **vendor-reset** via DKMS and add your iGPU ID (`0x1636` Renoir / `0x1638` Cezanne) in `src/device-db.h`
-3. (Debian 12/13 + kernel 6.12) if DKMS fails, patch `src/amd/amdgpu/atom.c` include
+3. (Debian 12/13 + kernel 6.12; current one is 6.12.94) if DKMS fails, patch `src/amd/amdgpu/atom.c` include
 4. Put VBIOS/ROM files into `/usr/share/vgabios`  
    - `vbios_1636.dat` or `vbios_1638.dat`  
    - `ATIAudioDevice_AA01.rom`
