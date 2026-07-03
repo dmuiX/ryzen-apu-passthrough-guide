@@ -23,7 +23,7 @@ Your exact combo of **hardware + BIOS + kernel + drivers** decides everything.
    - `ATIAudioDevice_AA01.rom`
 5. Add **both** PCI functions to your VM XML: iGPU **and** iGPU audio, and attach the ROM files (CRUCIAL! Without them you get Error 43)
 6. Use **UEFI + Secure Boot (OVMF)** and recommended Hyper-V/KVM feature flags
-7. Boot Windows → install AMD drivers
+7. Boot Windows → install AMD drivers: This one: https://drivers.amd.com/drivers/whql-amd-software-adrenalin-edition-25.8.1-win10-win11-aug-vega-polaris.exe
 8. Activate Windows Side reset (Also CRUCIAL! as without it the VM is not able to reset the GPU, seems like vendor-reset is not enough)
 
 > **Full step-by-step guide is below.**
