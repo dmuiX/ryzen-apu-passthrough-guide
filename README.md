@@ -30,6 +30,8 @@ Your exact combo of **hardware + BIOS + kernel + drivers** decides everything.
 
 ---
 
+## Some Problems and a Solution (my own situation)
+
 Note: This was rock-solid for me on Debian 12 + kernel 6.12.12
 On Debian 13 + 6.12.94 works as well!
 But Debian 13 with newest kernels 6.16 or 6.17 no 6.18 or 6.19 chance
