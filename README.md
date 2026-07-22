@@ -1,5 +1,7 @@
 # Ryzen APU iGPU Passthrough (Renoir / Cezanne)
 
+As far as I know, this is the only complete guide that actually gets AMD Ryzen 5000G iGPU passthrough running on KVM.
+
 Practical KVM/QEMU guide for Vega 6/8 with stable reset workflows.
 
 This repository documents a practical approach to get **Ryzen APU Vega iGPU passthrough** running on **KVM/QEMU**.
