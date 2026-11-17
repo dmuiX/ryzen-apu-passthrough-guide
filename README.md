@@ -1,4 +1,4 @@
-# Ryzen APU iGPU Passthrough (Renoir / Cezanne)
+# 💻 Ryzen APU iGPU Passthrough (Renoir / Cezanne)
 
 A practical **KVM/QEMU/libvirt** guide to passing an AMD Ryzen APU's **Vega iGPU and HDMI/DP audio** through to a Windows VM, including ROM handling and host- and guest-side reset workflows.
 
@@ -6,15 +6,15 @@ The documented setups use a **Ryzen 3 PRO 4350G** (Renoir, Vega 6, device ID `0x
 
 Results depend on the exact **APU, motherboard, BIOS, kernel, firmware, and Windows driver** combination. This is a record of working configurations and troubleshooting, not a universal passthrough or reset guarantee.
 
-- [Tested configurations and limitations](#tested-configurations-and-limitations)
-- [Architecture](#architecture-high-level)
-- [Step-by-step instructions](#step-by-step-instructions)
-- [Windows reset automation](#7-windows-resetdisable-automation)
-- [Troubleshooting and historical results](#troubleshooting-and-historical-results)
+- [🧪 Tested configurations and limitations](#-tested-configurations-and-limitations)
+- [🧩 Architecture](#-architecture-high-level)
+- [📋 Step-by-step instructions](#-step-by-step-instructions)
+- [🔄 Windows reset automation](#-7-windows-resetdisable-automation)
+- [🩺 Troubleshooting and historical results](#-troubleshooting-and-historical-results)
 
 ---
 
-## Quick overview
+## ⚡ Quick overview
 
 1. Enable **SVM and IOMMU** in the host firmware and verify suitable IOMMU groups.
 2. On the documented kernel baseline, add the matching iGPU ID to `vendor-reset` and install it through DKMS.
@@ -29,7 +29,7 @@ Read the limitations and full instructions before changing the host. Keep a reco
 
 ---
 
-## Tested configurations and limitations
+## 🧪 Tested configurations and limitations
 
 | Configuration | Documented result |
 | --- | --- |
@@ -56,13 +56,13 @@ An IOMMU fault alone does not establish the cause of a crash. Keep hardware faul
 
 ---
 
-## Architecture (high-level)
+## 🧩 Architecture (high-level)
 
 ![Architecture diagram](docs/architecture.svg)
 
 ---
 
-## Why this exists
+## 💡 Why this exists
 
 This guide brings together the steps and reset workarounds that worked on my machines, with links to the community discussions that informed them.
 
@@ -76,7 +76,7 @@ The goal is to make the setup and its limitations reproducible, including behavi
 
 ---
 
-## What this repo contains
+## 📦 What this repo contains
 
 ### VBIOS / ROM files
 - [`vbios_1636.dat`](vbios_1636.dat) — Renoir Vega 6, from the 4350G setup
@@ -96,13 +96,13 @@ The goal is to make the setup and its limitations reproducible, including behavi
 
 ---
 
-## Step-by-step instructions
+## 📋 Step-by-step instructions
 
 The workflow combines an experimental `AMD_NAVI10` device-ID mapping in **vendor-reset** with **Windows-side reset/disable automation** where needed. It is based in part on this [Proxmox community discussion](https://forum.proxmox.com/threads/amd-ryzen-5600g-igpu-code-43-error.138665/); the commands below target Debian with libvirt, not a complete Proxmox configuration.
 
 Before proceeding, have KVM/QEMU/libvirt, DKMS, and headers matching the running kernel available. Back up the VM XML and keep independent host access. Stop any VM using the GPU before rebuilding or unloading its reset module.
 
-## 1) Install and patch vendor-reset (Debian)
+## 🔧 1) Install and patch vendor-reset (Debian)
 
 ### 1.1 Clone vendor-reset
 
@@ -181,7 +181,7 @@ Reboot.
 
 ---
 
-## 2) IOMMU and GRUB
+## 🔗 2) IOMMU and GRUB
 
 ### 2.1 IOMMU groups
 On the documented motherboard, the GPU was already in a suitable IOMMU group. Verify the grouping of both GPU and audio on your own system before assigning them to a VM.
@@ -193,7 +193,7 @@ No additional GRUB options were needed on my **headless Debian 12 / OpenMediaVau
 
 ---
 
-## 3) VBIOS / ROM files
+## 💾 3) VBIOS / ROM files
 
 ### 3.1 Extract your VBIOS and HDMI audio ROM
 You can extract these from:
@@ -230,7 +230,7 @@ This path worked on the documented Debian host; other locations failed in that s
 
 ---
 
-## 4) Add the PCIe devices to your VM (libvirt domain.xml)
+## 🔌 4) Add the PCIe devices to your VM (libvirt domain.xml)
 
 ### 4.1 Add GPU + Audio hostdev entries
 Edit your VM XML (`virsh edit <vmname>` or virt-manager → XML) and add BOTH devices.
@@ -258,7 +258,7 @@ The addresses below are **examples**, not device discovery. Set each `<source>` 
 
 ---
 
-## 5) VM firmware + Windows compatibility options
+## 🧩 5) VM firmware + Windows compatibility options
 
 ### 5.1 OVMF/UEFI and Secure Boot
 
@@ -311,7 +311,7 @@ These flags were enabled in the working VM. Their individual necessity was not t
 
 ---
 
-## 6) Boot Windows + install AMD drivers
+## 💻 6) Boot Windows + install AMD drivers
 
 Boot the VM into Windows and install the manually downloaded [AMD Adrenalin 25.8.1 WHQL driver for Vega/Polaris, Windows 10/11](https://drivers.amd.com/drivers/whql-amd-software-adrenalin-edition-25.8.1-win10-win11-aug-vega-polaris.exe).
 
@@ -319,7 +319,7 @@ This is the version identified in the working notes; newer drivers are not valid
 
 ---
 
-## 7) Windows reset/disable automation
+## 🔄 7) Windows reset/disable automation
 
 This was required on my **5700G**; the documented **4350G** setup worked without it. Host-side `vendor-reset` alone was not enough for the 5700G workflow.
 
@@ -356,13 +356,13 @@ Use [`Archive/reset_gpu.xml`](Archive/reset_gpu.xml) and [`Archive/disable_gpu.x
 
 ---
 
-## Keywords
+## 🔎 Keywords
 
 Ryzen APU, iGPU passthrough, Vega 6, Vega 8, Renoir, Cezanne, KVM, QEMU, libvirt, VFIO, vendor-reset, Error 43, Windows VM, VBIOS, ROM, OVMF, IOMMU, DKMS.
 
 ---
 
-## Troubleshooting and historical results
+## 🩺 Troubleshooting and historical results
 
 Before considering the setup reliable, check display output, driver loading, GPU/audio operation, and repeated VM shutdown/start cycles without rebooting the host.
 
