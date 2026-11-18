@@ -40,7 +40,9 @@ Read the limitations and full instructions before changing the host. Keep a reco
 | Kernels **6.18 / 6.19** | Reset problems and `AMD-Vi: IO_PAGE_FAULT` events reported; not a validated path for this guide |
 | Windows driver **Adrenalin 25.8.1 WHQL** | Tested driver; reverting to it resolved the reported physical-console login crash |
 
-These are observations from the author's machines, not a claim that every 6.12 kernel works or that `vendor-reset` universally stops working after 6.12. The later-kernel notes attributed the failures to changed reset behavior; a working way to substitute `vendor-reset` was not found in that setup.
+Other **6.12.x kernels are likely to work as well**, since Linux 6.12 is an **LTS series** whose maintenance updates focus on bug and security fixes rather than new features. **No guarantee:** the versions listed above are observations from the author's machines, not validation of every 6.12.x release. Regressions and distribution-specific patches can still affect compatibility.
+
+These observations also do not establish that `vendor-reset` universally stops working after 6.12. The later-kernel notes attributed the failures to changed reset behavior; a working way to substitute `vendor-reset` was not found in that setup.
 
 ### Troubleshooting history
 
