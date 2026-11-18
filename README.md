@@ -1,99 +1,70 @@
-# Ryzen APU iGPU Passthrough (Renoir / Cezanne)
+# 💻 Ryzen APU iGPU Passthrough (Renoir / Cezanne)
 
-As far as I know, this is the only complete guide that actually gets AMD Ryzen 5000G iGPU passthrough running on KVM.
+A practical **KVM/QEMU/libvirt** guide to passing an AMD Ryzen APU's **Vega iGPU and HDMI/DP audio** through to a Windows VM, including ROM handling and host- and guest-side reset workflows.
 
-Practical KVM/QEMU guide for Vega 6/8 with stable reset workflows.
+The documented setups use a **Ryzen 3 PRO 4350G** (Renoir, Vega 6, device ID `0x1636`) and a **Ryzen 7 5700G** (Cezanne, Vega 8, `0x1638`). Other Ryzen 4000G/5000G models are related hardware, not a verified compatibility list.
 
-This repository documents a practical approach to get **Ryzen APU Vega iGPU passthrough** running on **KVM/QEMU**.
+Results depend on the exact **APU, motherboard, BIOS, kernel, firmware, and Windows driver** combination. This is a record of working configurations and troubleshooting, not a universal passthrough or reset guarantee.
 
-Primary target / confirmed focus:
-- ✅ **Ryzen 4000G series (Renoir, iGPU 0x1636)**
-- ✅ **Ryzen 5000G series (Cezanne, iGPU 0x1638)**
-
-It may also work for other APUs or even some discrete GPUs (dGPUs) — **but no guarantees**.  
-Your exact combo of **hardware + BIOS + kernel + drivers** decides everything.
-
----
-
-## Quick TL;DR (8 steps)
-
-1. Enable **SVM + IOMMU** in BIOS (UEFI recommended)
-2. Install **vendor-reset** via DKMS and add your iGPU ID (`0x1636` Renoir / `0x1638` Cezanne) in `src/device-db.h`
-3. (Debian 12/13 + kernel 6.12; current one is 6.12.94) if DKMS fails, patch `src/amd/amdgpu/atom.c` include
-4. Put VBIOS/ROM files into `/usr/share/vgabios`  
-   - `vbios_1636.dat` or `vbios_1638.dat`  
-   - `ATIAudioDevice_AA01.rom`
-5. Add **both** PCI functions to your VM XML: iGPU **and** iGPU audio, and attach the ROM files (CRUCIAL! Without them you get Error 43)
-6. Use **UEFI + Secure Boot (OVMF)** and recommended Hyper-V/KVM feature flags
-7. Boot Windows → install AMD drivers: This one: https://drivers.amd.com/drivers/whql-amd-software-adrenalin-edition-25.8.1-win10-win11-aug-vega-polaris.exe
-8. Activate Windows Side reset (Also CRUCIAL! as without it the VM is not able to reset the GPU, seems like vendor-reset is not enough)
-
-> **Full step-by-step guide is below.**
+- [🧪 Tested configurations and limitations](#-tested-configurations-and-limitations)
+- [🧩 Architecture](#-architecture-high-level)
+- [📋 Step-by-step instructions](#-step-by-step-instructions)
+- [🔄 Windows reset automation](#-7-windows-resetdisable-automation)
+- [🩺 Troubleshooting and historical results](#-troubleshooting-and-historical-results)
 
 ---
 
-## Some Problems and a Solution (my own situation)
+## ⚡ Quick overview
 
-Note: This was rock-solid for me on Debian 12 + kernel 6.12.12!
+1. Enable **SVM and IOMMU** in the host firmware and verify suitable IOMMU groups.
+2. On the documented kernel baseline, add the matching iGPU ID to `vendor-reset` and install it through DKMS.
+3. If the kernel 6.12 build fails on the unaligned-header include, apply the documented `atom.c` fix.
+4. Place compatible GPU VBIOS and audio ROM files in `/usr/share/vgabios`.
+5. Add **both GPU and audio PCI functions** to the VM XML and attach their ROMs. Missing audio/ROM configuration was associated with Error 43 in these setups.
+6. Use **OVMF/UEFI**; the guide includes the tested Secure Boot and Hyper-V/KVM settings, not a proven minimum configuration.
+7. Install the tested AMD **Adrenalin 25.8.1 WHQL** Windows driver.
+8. If needed, configure Windows reset/disable automation. It was required on the **5700G**, but not on the **4350G** in the documented setup.
 
-On Debian 13 + 6.12.94 this works as well!
+Read the limitations and full instructions before changing the host. Keep a recovery path that does not depend on the passed-through GPU.
 
-But Debian 13 with newest kernels 6.16 or 6.17 no 6.18 or 6.19 chance
+---
 
-NEW FINDINGS:
-I had a working version before I upgraded to Debian 13 on 10. January 2026
-Since then my VM crashed when I started a Game or even When I tried to login physically on the Monitor
+## 🧪 Tested configurations and limitations
 
-- libvirt, qemu, ovmf downgrade: so far no change
-- kernel downgrade to 6.12.12 also no change
-- removed firmware-amd-graphics completely
-- downgrade Windows Treiber to 25.8.1: This has fixed at least the login crash!!
+| Configuration | Documented result |
+| --- | --- |
+| Debian 12, kernel **6.12.12**, patched `vendor-reset` | Reported stable in the original setup |
+| Debian 13, kernel **6.12.73**, patched `vendor-reset` | Working fallback after later-kernel testing |
+| Debian 13, kernel **6.12.94**, patched `vendor-reset` | Also reported working in the latest repository notes |
+| Kernels **6.16 / 6.17** | Reported unsuccessful; no working configuration documented |
+| Kernels **6.18 / 6.19** | Reset problems and `AMD-Vi: IO_PAGE_FAULT` events reported; not a validated path for this guide |
+| Windows driver **Adrenalin 25.8.1 WHQL** | Tested driver; reverting to it resolved the reported physical-console login crash |
 
-Result: so far still crashes under Load...
+These are observations from the author's machines, not a claim that every 6.12 kernel works or that `vendor-reset` universally stops working after 6.12. The later-kernel notes attributed the failures to changed reset behavior; a working way to substitute `vendor-reset` was not found in that setup.
 
-SOLUTION NOW:
+### Troubleshooting history
 
-Problem of the crashes no matter what I tried was a fautly power supply.
+After the Debian 13 upgrade on **10 January 2026**, the VM crashed during physical-console login and under gaming load. Downgrading libvirt, QEMU, OVMF, and the kernel to 6.12.12 did not resolve the crashes. Removing `firmware-amd-graphics` was also tried; it is not a general recommendation. Reverting the Windows driver to 25.8.1 fixed the login crash, but load-related crashes remained until a **faulty power supply** was identified as their cause.
 
-So back to testing: Current Kernel 6.18 and 6.19 are using a new reset methode. But this seems to cause problems. Furthermore you cannot disable it and use vendor-reset instaed:
-```
-[  490.129794] amd_iommu_report_page_fault: 115868 callbacks suppressed
-[  490.129798] vfio-pci 0000:06:00.0: AMD-Vi: Event logged [IO_PAGE_FAULT domain=0x0002 address=0x3682ff000 flags=0x0000]
-[  490.129814] vfio-pci 0000:06:00.0: AMD-Vi: Event logged [IO_PAGE_FAULT domain=0x0002 address=0x368300000 flags=0x0000]
-[  490.129826] vfio-pci 0000:06:00.0: AMD-Vi: Event logged [IO_PAGE_FAULT domain=0x0002 address=0x368301000 flags=0x0000]
-[  490.129838] vfio-pci 0000:06:00.0: AMD-Vi: Event logged [IO_PAGE_FAULT domain=0x0002 address=0x368302000 flags=0x0000]
-[  490.129849] vfio-pci 0000:06:00.0: AMD-Vi: Event logged [IO_PAGE_FAULT domain=0x0002 address=0x368303000 flags=0x0000]
-[  490.129861] vfio-pci 0000:06:00.0: AMD-Vi: Event logged [IO_PAGE_FAULT domain=0x0002 address=0x368304000 flags=0x0000]
-[  490.129872] vfio-pci 0000:06:00.0: AMD-Vi: Event logged [IO_PAGE_FAULT domain=0x0002 address=0x368305000 flags=0x0000]
-[  490.129883] vfio-pci 0000:06:00.0: AMD-Vi: Event logged [IO_PAGE_FAULT domain=0x0002 address=0x368306000 flags=0x0000]
-[  490.129895] vfio-pci 0000:06:00.0: AMD-Vi: Event logged [IO_PAGE_FAULT domain=0x0002 address=0x368307000 flags=0x0000]
-[  490.129906] vfio-pci 0000:06:00.0: AMD-Vi: Event logged [IO_PAGE_FAULT domain=0x0002 address=0x368302000 flags=0x0000]
+Separate later-kernel testing still showed reset/IOMMU problems, so the documented working baseline returned to **6.12.73**, with **6.12.94** subsequently reported working as well. A representative log message was:
+
+```text
+vfio-pci 0000:06:00.0: AMD-Vi: Event logged [IO_PAGE_FAULT domain=0x0002 address=0x3682ff000 flags=0x0000]
 ```
 
-So I am back to Kernel 6.12.73 + vendor-reset
-
-current Kernel 6.12.94 works as well!
-
-seems like that line is pretty stable!
-
-Another important step was to use dhe right driver:
-
-Adrenalin 25.8.1 (WHQL Recommended)
-
-https://drivers.amd.com/drivers/whql-amd-software-adrenalin-edition-25.8.1-win10-win11-aug-vega-polaris.exe
+An IOMMU fault alone does not establish the cause of a crash. Keep hardware faults, Windows-driver behavior, and host reset compatibility separate when troubleshooting.
 
 ---
 
-## Architecture (high-level)
+## 🧩 Architecture (high-level)
 
 ![Architecture diagram](docs/architecture.svg)
 
 ---
 
-## Why this exists
+## 💡 Why this exists
 
-I did not find any complete working guide out there.
-So I built one.
+This guide brings together the steps and reset workarounds that worked on my machines, with links to the community discussions that informed them.
 
 Ryzen APU iGPU passthrough often fails with:
 - black screen
@@ -101,102 +72,41 @@ Ryzen APU iGPU passthrough often fails with:
 - reset issues after VM shutdown
 - “works once” behavior
 
-This repo documents a setup that is meant to be **repeatable**, not luck.
+The goal is to make the setup and its limitations reproducible, including behavior across VM shutdowns and restarts.
 
 ---
 
-## What this repo contains
+## 📦 What this repo contains
 
 ### VBIOS / ROM files
-- `vbios_1636.dat` — Renoir Vega 6 (e.g. 4350G)
-- `vbios_1638.dat` — Cezanne Vega 8 (e.g. 5700G)
-- `ATIAudioDevice_AA01.rom` — HDMI/DP audio ROM (works for both)
+- [`vbios_1636.dat`](vbios_1636.dat) — Renoir Vega 6, from the 4350G setup
+- [`vbios_1638.dat`](vbios_1638.dat) — Cezanne Vega 8, from the 5700G setup
+- [`ATIAudioDevice_AA01.rom`](ATIAudioDevice_AA01.rom) — HDMI/DP audio ROM used with both documented setups
 
-> **IMPORTANT:** You must include the **audio device** in passthrough — otherwise this commonly ends in **Error 43**.
+> Include the **audio device and its ROM** in the documented configuration. ROM compatibility is firmware/platform-specific; a matching APU name alone is not a guarantee.
 
-### Windows helper scripts
-- `manage-gpu.bat` — enable/disable/reset GPU + AUDIO device
-- `swap-gpu.*` — optional GPU ↔ VirtIO/VNC swap
+### Windows helper
+- [`manage-gpu.bat`](manage-gpu.bat) — enables, disables, or cycles both GPU and audio using `pnputil`; device IDs must be adapted.
+- [`Archive/reset_gpu.xml`](Archive/reset_gpu.xml) and [`Archive/disable_gpu.xml`](Archive/disable_gpu.xml) — Task Scheduler examples with machine-specific accounts and paths.
 
-### vendor-reset scripts
-- `install_vendor-reset_module.sh` - contains the necessary commands to first remove the dkms vendor-reset module and then install it again
-
----
-
-## Want the result without debugging? (Paid help)
-
-This repo is free and open and contains everything you need to build a working setup.
-
-But let’s be honest: **Ryzen APU iGPU passthrough can eat entire weekends**.
-
-If you’re reading this and thinking:
-
-> “Nice… but I don’t want to spend 6+ hours testing random changes until it finally works.”
-
-Then you can **hire me** for a **paid, done-with-you setup** (remote / guided troubleshooting).
-
-### What I can help you with
-✅ black screen / no output  
-✅ **Error 43** (and the usual audio-ROM trap)  
-✅ vendor-reset patch + DKMS build issues  
-✅ correct libvirt XML for **GPU + HDMI/DP audio**  
-✅ ROM/VBIOS handling (`/usr/share/vgabios` etc.)  
-✅ getting **stable start/stop/reboot behavior**  
-✅ making it repeatable (Windows Task Scheduler automation)
-
-### What this is (and what it isn’t)
-- This is **paid support**, not a free helpdesk
-- We agree on **scope + pricing upfront**
-- You keep full control of your system — I guide you, explain, and fix the chain with you
-- VFIO/iGPU passthrough depends on the right combination of mainboard, gpu, kernel. So this is **best-effort paid troubleshooting**, not a “100% guaranteed fix”. 
-- If your hardware/software combo looks unrealistic, I’ll tell you early.
-
-### What to send me (so I can tell you quickly if it’s doable)
-- APU model (e.g. **4350G / 5600G / 5700G**)  
-- Host OS (Debian / Proxmox / Ubuntu)
-- Kernel version (So far only 6.12 works with vendor-reset)
-- Your symptom (**Error 43** / black screen / only first boot works)
+### Host helpers
+- [`install_vendor-reset_module.sh`](install_vendor-reset_module.sh) — unloads the module, removes its DKMS registration, reinstalls it, and loads it again. The source path is hardcoded and must be adapted.
+- [`add_new_device_id.sh`](add_new_device_id.sh) — optional source/udev patch and DKMS rebuild helper. It must be placed in the `vendor-reset` source root and assumes module version `0.1.1`; review its package-install and forced-rebuild actions before use.
+- [`swag-gpu.py`](swag-gpu.py) — optional **host-side** libvirt helper to switch passthrough devices and VirtIO/VNC. It shuts down, redefines, and restarts the VM, with hardcoded PCI, USB, and ROM settings. Review and adapt it before use; it is not needed for the main guide.
 
 ---
 
-# Full step-by-step guide
+## 📋 Step-by-step instructions
 
-# Ryzen APU Vega iGPU Passthrough (Renoir / Cezanne) — Step-by-step Guide
+The workflow combines an experimental `AMD_NAVI10` device-ID mapping in **vendor-reset** with **Windows-side reset/disable automation** where needed. It is based in part on this [Proxmox community discussion](https://forum.proxmox.com/threads/amd-ryzen-5600g-igpu-code-43-error.138665/); the commands below target Debian with libvirt, not a complete Proxmox configuration.
 
-This repo documents a **working** approach to run an AMD **Ryzen APU Vega iGPU** as a **passthrough GPU** for a Windows VM (KVM/QEMU/libvirt).
+Before proceeding, have KVM/QEMU/libvirt, DKMS, and headers matching the running kernel available. Back up the VM XML and keep independent host access. Stop any VM using the GPU before rebuilding or unloading its reset module.
 
-## Hardware scope
-
-### ✅ Confirmed / intended support
-- **Ryzen 4000G series (Renoir, iGPU `0x1636`)**
-- **Ryzen 5000G series (Cezanne, iGPU `0x1638`)**
-
-### ⚠️ Might work on other hardware (no guarantees)
-Other APUs (and even some dGPUs) *might* work too, but results depend on your exact combo of **hardware + BIOS + kernel + driver**.
-
-## ⚠️ Software scope
-- vendor-reset currently only works until Kernel 6.12
----
-
-## Best way (what finally made it reliable)
-
-1) Add the iGPU to **vendor-reset** (`gnif/vendor-reset`) by adding your device ID to `src/device-db.h` under `AMD_NAVI10`, e.g.:
-- Renoir: `{PCI_VENDOR_ID_ATI, 0x1636, op, DEVICE_INFO(AMD_NAVI10)}, \`
-- Cezanne: `{PCI_VENDOR_ID_ATI, 0x1638, op, DEVICE_INFO(AMD_NAVI10)}, \`
-
-2) Use a Windows **manage-gpu** script + Task Scheduler to **reset the GPU on startup** and **disable it on shutdown**.
-
----
-
-# Step-by-step Instructions
-
-These steps are based on (and aligned with) the Proxmox forum discussion here:
-- https://forum.proxmox.com/threads/amd-ryzen-5600g-igpu-code-43-error.138665/
-
-## 1) Install and patch vendor-reset (Debian)
+## 🔧 1) Install and patch vendor-reset (Debian)
 
 ### 1.1 Clone vendor-reset
-- https://github.com/gnif/vendor-reset
+
+Source: [gnif/vendor-reset](https://github.com/gnif/vendor-reset). The device-ID changes below are local patches, not a statement of upstream APU support.
 
 ```bash
 git clone https://github.com/gnif/vendor-reset
@@ -210,8 +120,9 @@ lspci -nkk
 
 Renoir is typically `1636`, Cezanne is typically `1638`.
 
-### 1.3 Add your APU iGPU to `src/device-db.h` in the vendor_reset folder
-Edit: `src/device-db.h`
+### 1.3 Add your APU iGPU to `src/device-db.h`
+
+Edit `src/device-db.h` in the cloned `vendor-reset` source tree.
 
 Find the `AMD_NAVI10` block and add your entry (example includes Renoir):
 
@@ -229,13 +140,18 @@ For Cezanne add:
 
 ### 1.4 Install with DKMS
 
-easiest way:
-- copy the install_vendor-reset_module.sh into the vendor-reset folder
-- chmod +x install_vendor-reset_module.sh 
-- ./install_vendor-reset_module.sh 
+Review [`install_vendor-reset_module.sh`](install_vendor-reset_module.sh) first. It unloads `vendor_reset`, removes `vendor-reset/0.1.1` from DKMS, installs from a **hardcoded source path**, and loads the module. Change that path to your clone and confirm the module version before using it; copying it into the source folder alone does not change the path.
 
-### 1.5 Debian 12 + kernel 6.12 build fix (needed in my case)
-If DKMS fails on Debian 12 with kernel 6.12, I had to patch:
+After adapting the helper, copy it into the `vendor-reset` folder and run it there, with all GPU-using VMs stopped:
+
+```bash
+chmod +x install_vendor-reset_module.sh
+./install_vendor-reset_module.sh
+```
+
+### 1.5 Kernel 6.12 build fix (if needed)
+
+The Debian 12/13 notes document this include change for kernel 6.12. If your DKMS build fails because `asm/unaligned.h` is missing, patch:
 
 - Edit: `src/amd/amdgpu/atom.c`
 - Change:
@@ -247,9 +163,11 @@ to:
 #include <linux/unaligned.h>
 ```
 
-Then run the instal-script again
+Then rerun the adapted installer:
 
-./install_vendor-reset_module.sh 
+```bash
+./install_vendor-reset_module.sh
+```
 
 ### 1.6 Load the module at boot
 Note: the module name is `vendor_reset` (underscore, not dash).
@@ -263,33 +181,33 @@ Reboot.
 
 ---
 
-## 2) IOMMU and GRUB
+## 🔗 2) IOMMU and GRUB
 
 ### 2.1 IOMMU groups
-My mainboard had the GPU already in a separate IOMMU group.
+On the documented motherboard, the GPU was already in a suitable IOMMU group. Verify the grouping of both GPU and audio on your own system before assigning them to a VM.
 
-If yours is not, you may need ACS override / IOMMU separation (google your exact platform + “ACS override”).
+If unrelated host devices share the group, this guide does not establish a safe passthrough configuration for that layout. ACS override is not covered here and should not be treated as equivalent to hardware isolation.
 
 ### 2.2 GRUB options
-On my system no further GRUB options were necessary because my host is a **headless Debian 12 server** (OMV installed) and it seems to disable the iGPU automatically.
-
-(Your setup may differ.)
+No additional GRUB options were needed on my **headless Debian 12 / OpenMediaVault host**; the iGPU appeared to be available without further changes. This is a host-specific observation, not a general GPU-binding recipe. If the host is using the iGPU, resolve that for your platform before proceeding rather than applying unrelated kernel parameters or removing firmware packages.
 
 ---
 
-## 3) VBIOS / ROM files
+## 💾 3) VBIOS / ROM files
 
 ### 3.1 Extract your VBIOS and HDMI audio ROM
 You can extract these from:
 - your GPU / system firmware
 - or from a UEFI/BIOS update file
 
-If you have the same CPUs as me (4350G or 5700G), you can use the files in this repo:
+The repository includes ROMs used in the 4350G and 5700G setups:
 - `vbios_1636.dat` — Vega 6 (4350G)
 - `vbios_1638.dat` — Vega 8 (5700G)
-- `ATIAudioDevice_AA01.rom` — HDMI audio device (works for both)
+- `ATIAudioDevice_AA01.rom` — HDMI audio ROM used with both
 
-> **IMPORTANT:** You must include the **audio device** otherwise passthrough often ends as **Error 43**.
+Prefer ROMs extracted from your own firmware and verify compatibility before reusing these files, even with the same APU model.
+
+> Include the **audio PCI function and audio ROM**, as well as the GPU ROM, when following this configuration. Error 43 can have other causes too.
 
 ### 3.2 My extraction method (BIOS update file)
 I used:
@@ -301,22 +219,23 @@ Then convert as described here:
 - https://github.com/isc30/ryzen-gpu-passthrough-proxmox/discussions/18#discussioncomment-8627679
 
 ### 3.3 Put ROM files where libvirt can load them (Debian)
-Add the VBIOS/ROM files to:
+From this repository's root, copy the compatible VBIOS/ROM files to the documented location:
+
 ```bash
 sudo mkdir -p /usr/share/vgabios
 sudo cp vbios_1636.dat vbios_1638.dat ATIAudioDevice_AA01.rom /usr/share/vgabios/
 ```
 
-On Debian, this path was required for me (other locations did not work).
+This path worked on the documented Debian host; other locations failed in that setup. Ensure libvirt/QEMU can read the files under the host's access-control policy.
 
 ---
 
-## 4) Add the PCIe devices to your VM (libvirt domain.xml)
+## 🔌 4) Add the PCIe devices to your VM (libvirt domain.xml)
 
 ### 4.1 Add GPU + Audio hostdev entries
 Edit your VM XML (`virsh edit <vmname>` or virt-manager → XML) and add BOTH devices.
 
-Example (adjust bus/slot/function to your system):
+The addresses below are **examples**, not device discovery. Set each `<source>` address to the actual host PCI function, choose the matching GPU ROM (`vbios_1638.dat` for the documented 5700G), and ensure the guest PCI addresses fit your VM's controller layout. Back up the XML before editing:
 
 ```xml
 <hostdev mode="subsystem" type="pci" managed="yes">
@@ -339,12 +258,13 @@ Example (adjust bus/slot/function to your system):
 
 ---
 
-## 5) VM firmware + Windows compatibility options
+## 🧩 5) VM firmware + Windows compatibility options
 
-### 5.1 UEFI + Secure Boot (required)
-UEFI is necessary. For Win11, virt-manager usually configures this automatically.
+### 5.1 OVMF/UEFI and Secure Boot
 
-Example:
+The documented VM uses **OVMF/UEFI with Secure Boot**. Secure Boot is part of the tested configuration, not established here as a universal requirement for APU passthrough. Check the firmware actually selected by virt-manager rather than relying on defaults.
+
+Example: adapt the Q35 machine version, installed OVMF paths, and VM-specific NVRAM path to your host:
 ```xml
 <os firmware='efi'>
   <type arch='x86_64' machine='pc-q35-10.0'>hvm</type>
@@ -358,8 +278,9 @@ Example:
 </os>
 ```
 
-### 5.2 Hyper-V / KVM feature flags (I left them enabled)
-I enabled a bunch of options. I’m not sure which ones are strictly necessary, but I did not want to keep testing once it worked:
+### 5.2 Hyper-V / KVM feature flags
+
+These flags were enabled in the working VM. Their individual necessity was not tested; this is a configuration snapshot, not a required minimum. Merge it carefully with your existing VM settings. The Hyper-V vendor ID below is an example value:
 
 ```xml
 <features>
@@ -373,7 +294,7 @@ I enabled a bunch of options. I’m not sure which ones are strictly necessary, 
     <synic state='on'/>
     <stimer state='on'/>
     <reset state='on'/>
-    <vendor_id state='on' value='1756857dhai7'/>
+    <vendor_id state='on' value='Example12345'/>
     <frequencies state='on'/>
     <reenlightenment state='on'/>
     <tlbflush state='on'/>
@@ -390,55 +311,65 @@ I enabled a bunch of options. I’m not sure which ones are strictly necessary, 
 
 ---
 
-## 6) Boot Windows + install AMD drivers
+## 💻 6) Boot Windows + install AMD drivers
 
-Boot the VM into Windows and install AMD drivers.
-For me the **official AMD drivers** worked (manual download). Automatic detection may work too.
+Boot the VM into Windows and install the manually downloaded [AMD Adrenalin 25.8.1 WHQL driver for Vega/Polaris, Windows 10/11](https://drivers.amd.com/drivers/whql-amd-software-adrenalin-edition-25.8.1-win10-win11-aug-vega-polaris.exe).
 
----
-
-## 7) Optional but sometimes required: Windows reset/disable automation
-
-This was required on my **5700G**.  
-My **4350G** worked without it.
-
-I created `manage-gpu.bat` which can **enable/disable/reset** both the GPU and the AUDIO device in Device Manager.
-
-### 7.1 Get the device instance paths
-In Windows Device Manager:
-- open the GPU device → **Details** → **Device instance path**
-- do the same for the AUDIO device
-
-Example:
-`PCI\\VEN_1002&DEV_1638&SUBSYS_D0001458&REV_C8\\4&3B1E1872&0&000D`
-
-You can omit the tail after the second backslash:
-- use: `PCI\\VEN_1002&DEV_1638&SUBSYS_D0001458&REV_C8`
-Set these values as `GPU_ID` and `AUDIO_ID` in the script.
-
-### 7.2 Import scheduled tasks
-1) Import `Archive/disable_gpu.xml` and `Archive/reset_gpu.xml` in Task Scheduler
-2) Save / enable the tasks
+This is the version identified in the working notes; newer drivers are not validated by this guide. Reverting to 25.8.1 resolved the reported physical-console login crash, but did not fix the separate power-supply problem.
 
 ---
 
-## Keywords
+## 🔄 7) Windows reset/disable automation
+
+This was required on my **5700G**; the documented **4350G** setup worked without it. Host-side `vendor-reset` alone was not enough for the 5700G workflow.
+
+[`manage-gpu.bat`](manage-gpu.bat) uses `pnputil` to **enable**, **disable**, or **reset** both GPU and audio. Here, `/reset` means disable, wait five seconds, then enable; it is not a replacement for the host's PCI reset mechanism. Disabling the GPU interrupts its display output, so retain another access method.
+
+### 7.1 Set the device hardware IDs
+
+The current script passes `/deviceid` to `pnputil`, so use **hardware IDs**, not a full device-instance path:
+
+1. In Windows Device Manager, open the GPU → **Properties → Details → Hardware Ids**.
+2. Do the same for its audio device; the Windows audio ID may begin with `HDAUDIO`, not `PCI`.
+3. Replace `GPU_ID` and `AUDIO_ID` in the script with the matching values from your VM. Do not copy the script's machine-specific defaults blindly.
+
+GPU hardware-ID format (placeholder only): `PCI\VEN_1002&DEV_1638&SUBSYS_XXXXXXXX&REV_XX`.
+
+Test the adapted script from an elevated command prompt before scheduling it:
+
+```bat
+manage-gpu.bat /reset
+manage-gpu.bat /disable
+manage-gpu.bat /enable
+```
+
+Check `C:\gpu_disable_log.txt` and `C:\gpu_enable_log.txt` for the `pnputil` results; `/reset` calls both actions and does not create a separate reset log. The batch file can finish with exit code zero even after device-command failures.
+
+### 7.2 Adapt and enable scheduled tasks
+
+Use [`Archive/reset_gpu.xml`](Archive/reset_gpu.xml) and [`Archive/disable_gpu.xml`](Archive/disable_gpu.xml) as examples, not ready-to-import tasks for every machine:
+
+- Set your own account/security principal, script path, and elevated execution settings.
+- The reset task runs `/reset` **at user logon**, not at host or VM startup.
+- The disable task runs `/disable` on **System / User32 event 1074** (a requested shutdown or restart), not on every logout. It is disabled in the exported XML; enable it after adapting and testing it.
+- Confirm both actions run on your guest. A forced shutdown or crash may bypass the disable task.
+
+---
+
+## 🔎 Keywords
 
 Ryzen APU, iGPU passthrough, Vega 6, Vega 8, Renoir, Cezanne, KVM, QEMU, libvirt, VFIO, vendor-reset, Error 43, Windows VM, VBIOS, ROM, OVMF, IOMMU, DKMS.
 
 ---
 
-## Celebrate 🎉
+## 🩺 Troubleshooting and historical results
 
-You successfully implemented a working APU iGPU passthrough setup — which many say is impossible.
+Before considering the setup reliable, check display output, driver loading, GPU/audio operation, and repeated VM shutdown/start cycles without rebooting the host.
 
----
+- **Error 43:** verify that both PCI functions and their compatible ROMs are configured. This is a documented failure mode, not the only possible cause.
+- **Works once, then black screen:** verify the host reset module and, on the 5700G workflow, the Windows reset/disable tasks and their logs.
+- **Crashes under load:** do not assume a reset failure. The documented load-related crashes were traced to a faulty power supply; kernel and driver symptoms need separate investigation.
 
-## Did not work (for me)
+A QEMU hook that removed the GPU/audio PCI devices through sysfs and rescanned the bus **did not work** in these tests. Device removal is not equivalent to the `vendor_reset` reset sequence.
 
-A qemu hook with just:
-`/sys/bus/pci/devices/0000:06:00.0/remove 2>/dev/null`
-
-`vendor_reset` is doing more than that.
-
----
+The [archived guide](Archive/README.md), [test notes](Archive/Tests%20Results.md), and [reset-method logs](Archive/test_results_vendor-reset_methodes) preserve earlier attempts, including Error 31, black screens, and driver-install freezes while testing Vega, Polaris, and Navi reset handlers. They are historical records, not alternative validated recipes, and predate the working configuration summarized above.
