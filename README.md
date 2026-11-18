@@ -35,7 +35,7 @@ Read the limitations and full instructions before changing the host. Keep a reco
 | --- | --- |
 | Debian 12, kernel **6.12.12**, patched `vendor-reset` | Reported stable in the original setup |
 | Debian 13, kernel **6.12.73**, patched `vendor-reset` | Working fallback after later-kernel testing |
-| Debian 13, kernel **6.12.94+**, patched `vendor-reset` | Also reported working in the latest repository notes |
+| Debian 13, kernel **6.12.94**, patched `vendor-reset` | Also reported working in the latest repository notes |
 | Kernels **6.16 / 6.17** | Reported unsuccessful; no working configuration documented |
 | Kernels **6.18 / 6.19** | Reset problems and `AMD-Vi: IO_PAGE_FAULT` events reported; not a validated path for this guide |
 | Windows driver **Adrenalin 25.8.1 WHQL** | Tested driver; reverting to it resolved the reported physical-console login crash |
